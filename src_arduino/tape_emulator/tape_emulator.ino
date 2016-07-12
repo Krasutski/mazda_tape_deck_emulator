@@ -8,6 +8,22 @@
 #define CMD_SEEK_UP     0x10
 #define CMD_SEEK_DOWN   0x20
 
+
+#define RX_TIMEOUT_US   10000
+#define IN_BUFFER_SIZE  16U
+
+#define RESET_BIT_POS   0x08
+
+
+//#define ENABLE_DEBUG_OUTPUT 1
+
+
+#if ENABLE_DEBUG_OUTPUT
+#define DEBUG_PRINT(...)  Serial.print(__VA_ARGS__)
+#else
+#define DEBUG_PRINT(...)
+#endif
+
 /* message mustbe aligned to bytes*/
 typedef struct rxMessage {
   uint8_t target;
@@ -43,7 +59,7 @@ const int IO_PIN = 3;
 // data present in nibbles, byte equal nibble
 const uint8_t TAPECMD_POWER_ON[] =        {0x08, 0x08, 0x01, 0x02};
 const uint8_t TAPECMD_STOPPED[] =         {0x08, 0x09, 0x00, 0x0C, 0x0E};
-const uint8_t TAPECMD_PLAYING[] =          {0x08, 0x09, 0x04, 0x01, 0x05};
+const uint8_t TAPECMD_PLAYING[] =         {0x08, 0x09, 0x04, 0x01, 0x05};
 const uint8_t TAPECMD_SEEKING[] =         {0x08, 0x09, 0x05, 0x01, 0x06};
 const uint8_t TAPECMD_CASSETE_PRESENT[] = {0x08, 0x0B, 0x09, 0x00, 0x04, 0x00, 0x00, 0x0C, 0x03};
 const uint8_t TAPECMD_PLAYBACK[] =        {0x08, 0x0B, 0x09, 0x00, 0x04, 0x00, 0x00, 0x01, 0x00};
@@ -52,55 +68,37 @@ const uint8_t TAPECMD_REPEAT_PLAY[] =     {0x08, 0x0B, 0x09, 0x00, 0x05, 0x00, 0
 const uint8_t TAPECMD_FAST_REWIND[] =     {0x08, 0x0B, 0x09, 0x03, 0x04, 0x00, 0x01, 0x01, 0x0E};
 const uint8_t TAPECMD_FAST_FORWARD[] =    {0x08, 0x0B, 0x09, 0x02, 0x04, 0x00, 0x01, 0x01, 0x0D};
 
-#define RX_TIMEOUT_US   10000
-#define IN_BUFFER_SIZE  16U
-#define RESET_BIT_POS   0x08
-uint8_t inBuffer[IN_BUFFER_SIZE];
-uint8_t bytePos = 0;
-uint8_t biteShiftMask = RESET_BIT_POS;
-
+static uint8_t inBuffer[IN_BUFFER_SIZE] = {0U};
+static uint8_t byteReceived = 0;
+static uint8_t biteShiftMask = RESET_BIT_POS;
 static uint32_t rx_time = 0;
 
 
 void setup() {
   pinMode(IO_PIN, INPUT_PULLUP); //INPUT_PULLUP OUTPUT INPUT
   attachInterrupt(digitalPinToInterrupt(IO_PIN), collectInputData, CHANGE);
-
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-#if DEBUG_CODE
-  static int init = 0;
-
-  if (init == 0) {
-    send_message(&TAPECMD_POWER_ON);
-    delay(1000);
-    send_message(&TAPECMD_CASSETE_PRESENT);
-    delay(1000);
-    init = 1;
-  } else {
-    delay(60000);
-    init = 0;
-  }
-#endif
 
   if (rx_time >= (micros() - RX_TIMEOUT_US)) {
-    process_radio_message((rxMessage_t*)inBuffer);
-    bufferReset();
+    if (byteReceived != 0U ) {
+      DEBUG_PRINT("Message resived\r\n");
+      process_radio_message((rxMessage_t*)inBuffer);
+      bufferReset();
+    }
   }
-
 }
 
-void bufferReset()
-{
-  bytePos = 0;
+void bufferReset() {
+
+  for (uint8_t i = 0U; i < byteReceived; i++) {
+    inBuffer[i] = 0U;
+  }
+
+  byteReceived = 0;
   biteShiftMask = RESET_BIT_POS;
 
-  //Clear buffer
-  for (uint8_t i = 0; i < IN_BUFFER_SIZE; i++) {
-    inBuffer[i] = 0;
-  }
 }
 
 void collectInputData() {
@@ -111,28 +109,31 @@ void collectInputData() {
   elapsed_time = micros() - rx_time;
   rx_time = micros();
 
-  if ( digitalRead(IO_PIN) == LOW) {
+  if (digitalRead(IO_PIN) == LOW) {
     return;
   }
 
   if ( (elapsed_time > 1000) && (elapsed_time < 2200) ) {
-    inBuffer[bytePos] |= biteShiftMask;
+    inBuffer[byteReceived] |= biteShiftMask;
+  } else {
+    DEBUG_PRINT("Long low pulse. Reset buffer.\r\n");
+    bufferReset();
+    return;
   }
 
   biteShiftMask >>= 1U;
 
   if (biteShiftMask == 0U) {
     biteShiftMask = RESET_BIT_POS; //save one nibble to one byte
-    ++bytePos;
+    ++byteReceived;
   }
 
-  if (bytePos >= IN_BUFFER_SIZE) {
+  if (byteReceived >= IN_BUFFER_SIZE) {
     bufferReset();
   }
 }
 
-static void send_nibble(const uint8_t nibble)
-{
+static void send_nibble(const uint8_t nibble) {
   uint8_t nibbleShiftMask = 0x08;
   uint8_t bit_value = 0U;
 
@@ -166,6 +167,10 @@ static void send_nibble(const uint8_t nibble)
 // Send a message on the Mazda radio bus
 void send_message(const uint8_t *message, const uint8_t lenght) {
 
+  DEBUG_PRINT("Send message...");
+  DEBUG_PRINT(lenght);
+  DEBUG_PRINT("\r\n");
+
   detachInterrupt(digitalPinToInterrupt(IO_PIN));
   pinMode(IO_PIN, OUTPUT);
 
@@ -181,79 +186,31 @@ void send_message(const uint8_t *message, const uint8_t lenght) {
 void process_radio_message(const rxMessage_t *message) {
 
   //check target, 0 is tape desk
-  if (message->target != Target_TapeDesk)
-  {
+  if (message->target != Target_TapeDesk) {
     return;
   }
 
   if (message->command == Command_AnyBodyHome) {
 
+    DEBUG_PRINT("Any body home msg\r\n");
     send_message(TAPECMD_POWER_ON, sizeof(TAPECMD_POWER_ON));
     delay(8);
     send_message(TAPECMD_CASSETE_PRESENT, sizeof(TAPECMD_CASSETE_PRESENT));
 
   } else if (message->command == Command_WakeUp) {
 
+    DEBUG_PRINT("Wake up msg\r\n");
+
     send_message(TAPECMD_CASSETE_PRESENT, sizeof(TAPECMD_CASSETE_PRESENT));
     delay(10);
     send_message(TAPECMD_STOPPED, sizeof(TAPECMD_STOPPED));
   } else {
+
+    DEBUG_PRINT("another msg\r\n");
+
     send_message(TAPECMD_PLAYING, sizeof(TAPECMD_PLAYING));
     delay(7);
     send_message(TAPECMD_PLAYBACK, sizeof(TAPECMD_PLAYBACK));
     delay(7);
   }
-
-#if PROC_COMMAND
-  // Control command
-  if (message->command == 0x01) {
-
-    // Extract the specific subcommand and command
-    uint8_t subcommand = message->data[0U];
-    uint8_t command = (message->data[1] << 4) | (message->data[2]);
-
-    // Playback control
-    if (subcommand == 0x1) {
-
-      if (command & CMD_PLAY) {
-        //on_play_changed( command );
-      }
-
-      if (command & CMD_FASTFORWARD) {
-        //on_fastforward_changed( command );
-      }
-
-      if (command & CMD_REWIND) {
-        //on_rewind_changed( command );
-      }
-
-      if (command & CMD_STOP) {
-        //on_stop_changed( command );
-      }
-    }
-
-    // Set configuration data
-    if (subcommand == 0x4) {
-      if (command == 0) {
-        //on_repeat_changed( command );
-      }
-
-      if (command & CMD_REPEAT) {
-        //on_repeat_changed( command );
-      }
-
-      if (command & CMD_RANDOM) {
-        //on_random_pressed();
-      }
-
-      if (command & CMD_SEEK_UP) {
-        //on_seek_up_pressed();
-      }
-
-      if (command & CMD_SEEK_DOWN) {
-        //on_seek_down_pressed();
-      }
-    }
-  }
-#endif
 }
