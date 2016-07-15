@@ -1,28 +1,34 @@
+//Configuration
 
-#define CMD_PLAY        0x01
-#define CMD_FASTFORWARD 0x04
-#define CMD_REWIND      0x08
-#define CMD_STOP        0x60
-#define CMD_REPEAT      0x01
-#define CMD_RANDOM      0x02
-#define CMD_SEEK_UP     0x10
-#define CMD_SEEK_DOWN   0x20
+#define USE_TIMER1
 
+//#define ENABLE_DEBUG_OUTPUT
 
-#define RX_TIMEOUT_US   10000
-#define IN_BUFFER_SIZE  16U
+//Depended parameters
 
-#define RESET_BIT_POS   0x08
+#ifdef USE_TIMER1
+#define BIT_LOW_LEVEL_DURATION_MIN  (350) //value in timer ticks, 1tiks=4us, 1400/4 = 350
+#define BIT_LOW_LEVEL_DURATION_MAX  (500) //value in timer ticks, 1tiks=4us, 2000/4 = 500
+#else
+#define BIT_LOW_LEVEL_DURATION_MIN  (1400)  //value in us
+#define BIT_LOW_LEVEL_DURATION_MAX  (2000)  //value in us
+#endif
 
-
-//#define ENABLE_DEBUG_OUTPUT 1
-
-
-#if ENABLE_DEBUG_OUTPUT
-#define DEBUG_PRINT(...)  Serial.print(__VA_ARGS__)
+#ifdef ENABLE_DEBUG_OUTPUT
+#define DEBUG_PRINT(...)  if(Serial){ Serial.print(__VA_ARGS__); }
 #else
 #define DEBUG_PRINT(...)
 #endif
+
+//Constants
+#define IO_PIN_INPUT_MODE (INPUT_PULLUP) //INPUT_PULLUP OUTPUT INPUT
+
+#define RX_TIMEOUT_MS   8U
+#define IN_BUFFER_SIZE  16U
+
+#define NIBBLE_RESET_BIT_POS   0x08
+
+#define IO_PIN 3U
 
 /* message mustbe aligned to bytes*/
 typedef struct rxMessage {
@@ -41,7 +47,6 @@ typedef enum rxMessageTarget_e {
   Target_BaseUnit = 0x08
 } rxMessageTarget_t;
 
-
 typedef enum rxMessageCommand_e {
   Command_Control = 0x01,
   Command_AnyBodyHome = 0x08,
@@ -54,7 +59,6 @@ typedef enum rxMessageSubCommand_e {
   SubCommand_SetConfig = 0x04
 } rxMessageSubCommand_t;
 
-const int IO_PIN = 3;
 
 // data present in nibbles, byte equal nibble
 const uint8_t TAPECMD_POWER_ON[] =        {0x08, 0x08, 0x01, 0x02};
@@ -69,52 +73,75 @@ const uint8_t TAPECMD_FAST_REWIND[] =     {0x08, 0x0B, 0x09, 0x03, 0x04, 0x00, 0
 const uint8_t TAPECMD_FAST_FORWARD[] =    {0x08, 0x0B, 0x09, 0x02, 0x04, 0x00, 0x01, 0x01, 0x0D};
 
 static uint8_t inBuffer[IN_BUFFER_SIZE] = {0U};
-static uint8_t byteReceived = 0;
-static uint8_t biteShiftMask = RESET_BIT_POS;
-static uint32_t rx_time = 0;
-
+static uint8_t nibblesReceived = 0;
+static uint8_t biteShiftMask = NIBBLE_RESET_BIT_POS;
+static uint32_t rx_time_us = 0;
+static uint32_t rx_time_ms = 0;
 
 void setup() {
-  pinMode(IO_PIN, INPUT_PULLUP); //INPUT_PULLUP OUTPUT INPUT
+  pinMode(IO_PIN, IO_PIN_INPUT_MODE);
   attachInterrupt(digitalPinToInterrupt(IO_PIN), collectInputData, CHANGE);
+
+#ifdef ENABLE_DEBUG_OUTPUT
+  Serial.begin(9600);
+#endif
+
+#ifdef USE_TIMER1
+  noInterrupts();
+  TCCR1A = 0;
+  TCNT1 = 0;
+
+  //TCCR1B = ((0 << CS12) | (0 << CS11) | (1 << CS10) ); // 1 prescaler, 16MHz => 1tick = 0.0625us, full overflow time = 4ms
+  //TCCR1B = ((0 << CS12) | (1 << CS11) | (0 << CS10) ); // 8 prescaler, 2MHz => 1tick = 0.5us, full overflow time = 32ms
+  TCCR1B = ((0 << CS12) | (1 << CS11) | (1 << CS10) ); // 64 prescaler, 250khz => 1tick = 4us, full overflow time = 262ms
+  //TCCR1B = ((1 << CS12) | (0 << CS11) | (0 << CS10) ); // 256 prescaler, 62.5khz => 1tick = 16us, full overflow time =  16.7s  //TIMSK1 |= (1 << TOIE1);  // enable timer overflow interrupt
+  interrupts();
+#endif
 }
 
 void loop() {
-
-  if (rx_time >= (micros() - RX_TIMEOUT_US)) {
-    if (byteReceived != 0U ) {
+  if (rx_time_ms >= (millis() - RX_TIMEOUT_MS)) {
+    if (nibblesReceived != 0U ) {
       DEBUG_PRINT("Message resived\r\n");
+
+      noInterrupts();
       process_radio_message((rxMessage_t*)inBuffer);
       bufferReset();
+      interrupts();
     }
   }
 }
 
 void bufferReset() {
-
-  for (uint8_t i = 0U; i < byteReceived; i++) {
+  for (uint8_t i = 0U; i < nibblesReceived; i++) {
     inBuffer[i] = 0U;
   }
 
-  byteReceived = 0;
-  biteShiftMask = RESET_BIT_POS;
-
+  nibblesReceived = 0;
+  biteShiftMask = NIBBLE_RESET_BIT_POS;
 }
 
 void collectInputData() {
-
   uint32_t elapsed_time = 0;
 
+#ifdef USE_TIMER1
+  elapsed_time = TCNT1;
+#else
   // calculate pulse time
-  elapsed_time = micros() - rx_time;
-  rx_time = micros();
+  elapsed_time = micros() - rx_time_us;
+  rx_time_us = micros();
+#endif
+  rx_time_ms = millis();
 
   if (digitalRead(IO_PIN) == LOW) {
+#ifdef USE_TIMER1
+    TCNT1 = 0;
+#endif
     return;
   }
 
-  if ( (elapsed_time > 1000) && (elapsed_time < 2200) ) {
-    inBuffer[byteReceived] |= biteShiftMask;
+  if ( (elapsed_time > BIT_LOW_LEVEL_DURATION_MIN) && (elapsed_time < BIT_LOW_LEVEL_DURATION_MAX) ) {
+    inBuffer[nibblesReceived] |= biteShiftMask;
   } else {
     DEBUG_PRINT("Long low pulse. Reset buffer.\r\n");
     bufferReset();
@@ -124,11 +151,11 @@ void collectInputData() {
   biteShiftMask >>= 1U;
 
   if (biteShiftMask == 0U) {
-    biteShiftMask = RESET_BIT_POS; //save one nibble to one byte
-    ++byteReceived;
+    biteShiftMask = NIBBLE_RESET_BIT_POS; //save one nibble to one byte
+    ++nibblesReceived;
   }
 
-  if (byteReceived >= IN_BUFFER_SIZE) {
+  if (nibblesReceived >= IN_BUFFER_SIZE) {
     bufferReset();
   }
 }
@@ -166,7 +193,6 @@ static void send_nibble(const uint8_t nibble) {
 
 // Send a message on the Mazda radio bus
 void send_message(const uint8_t *message, const uint8_t lenght) {
-
   DEBUG_PRINT("Send message...");
   DEBUG_PRINT(lenght);
   DEBUG_PRINT("\r\n");
@@ -178,34 +204,32 @@ void send_message(const uint8_t *message, const uint8_t lenght) {
     send_nibble(message[i]);
   }
 
-  pinMode(IO_PIN, INPUT);
+  pinMode(IO_PIN, IO_PIN_INPUT_MODE);
   attachInterrupt(digitalPinToInterrupt(IO_PIN), collectInputData, CHANGE);
 }
 
 
 void process_radio_message(const rxMessage_t *message) {
-
   //check target, 0 is tape desk
   if (message->target != Target_TapeDesk) {
     return;
   }
 
   if (message->command == Command_AnyBodyHome) {
-
     DEBUG_PRINT("Any body home msg\r\n");
+    
     send_message(TAPECMD_POWER_ON, sizeof(TAPECMD_POWER_ON));
     delay(8);
     send_message(TAPECMD_CASSETE_PRESENT, sizeof(TAPECMD_CASSETE_PRESENT));
 
   } else if (message->command == Command_WakeUp) {
-
     DEBUG_PRINT("Wake up msg\r\n");
 
     send_message(TAPECMD_CASSETE_PRESENT, sizeof(TAPECMD_CASSETE_PRESENT));
     delay(10);
     send_message(TAPECMD_STOPPED, sizeof(TAPECMD_STOPPED));
-  } else {
 
+  } else {
     DEBUG_PRINT("another msg\r\n");
 
     send_message(TAPECMD_PLAYING, sizeof(TAPECMD_PLAYING));
