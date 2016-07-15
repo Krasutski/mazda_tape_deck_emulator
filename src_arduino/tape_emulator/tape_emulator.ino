@@ -72,7 +72,7 @@ const uint8_t TAPECMD_REPEAT_PLAY[] =     {0x08, 0x0B, 0x09, 0x00, 0x05, 0x00, 0
 const uint8_t TAPECMD_FAST_REWIND[] =     {0x08, 0x0B, 0x09, 0x03, 0x04, 0x00, 0x01, 0x01, 0x0E};
 const uint8_t TAPECMD_FAST_FORWARD[] =    {0x08, 0x0B, 0x09, 0x02, 0x04, 0x00, 0x01, 0x01, 0x0D};
 
-static uint8_t inBuffer[IN_BUFFER_SIZE] = {0U};
+static uint8_t inNibblesBuffer[IN_BUFFER_SIZE] = {0U};
 static uint8_t nibblesReceived = 0;
 static uint8_t biteShiftMask = NIBBLE_RESET_BIT_POS;
 static uint32_t rx_time_us = 0;
@@ -105,7 +105,7 @@ void loop() {
       DEBUG_PRINT("Message resived\r\n");
 
       noInterrupts();
-      process_radio_message((rxMessage_t*)inBuffer);
+      process_radio_message((rxMessage_t*)inNibblesBuffer);
       bufferReset();
       interrupts();
     }
@@ -114,7 +114,7 @@ void loop() {
 
 void bufferReset() {
   for (uint8_t i = 0U; i < nibblesReceived; i++) {
-    inBuffer[i] = 0U;
+    inNibblesBuffer[i] = 0U;
   }
 
   nibblesReceived = 0;
@@ -141,7 +141,7 @@ void collectInputData() {
   }
 
   if ( (elapsed_time > BIT_LOW_LEVEL_DURATION_MIN) && (elapsed_time < BIT_LOW_LEVEL_DURATION_MAX) ) {
-    inBuffer[nibblesReceived] |= biteShiftMask;
+    inNibblesBuffer[nibblesReceived] |= biteShiftMask;
   } else {
     DEBUG_PRINT("Long low pulse. Reset buffer.\r\n");
     bufferReset();
@@ -228,7 +228,6 @@ void process_radio_message(const rxMessage_t *message) {
     send_message(TAPECMD_CASSETE_PRESENT, sizeof(TAPECMD_CASSETE_PRESENT));
     delay(10);
     send_message(TAPECMD_STOPPED, sizeof(TAPECMD_STOPPED));
-
   } else {
     DEBUG_PRINT("another msg\r\n");
 
