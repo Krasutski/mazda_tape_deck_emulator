@@ -87,15 +87,15 @@ void setup() {
 #endif
 
 #ifdef USE_TIMER1
-  noInterrupts();
-  TCCR1A = 0;
-  TCNT1 = 0;
+  noInterrupts(); {
+    TCCR1A = 0;
+    TCNT1 = 0;
 
-  //TCCR1B = ((0 << CS12) | (0 << CS11) | (1 << CS10) ); // 1 prescaler, 16MHz => 1tick = 0.0625us, full overflow time = 4ms
-  //TCCR1B = ((0 << CS12) | (1 << CS11) | (0 << CS10) ); // 8 prescaler, 2MHz => 1tick = 0.5us, full overflow time = 32ms
-  TCCR1B = ((0 << CS12) | (1 << CS11) | (1 << CS10) ); // 64 prescaler, 250khz => 1tick = 4us, full overflow time = 262ms
-  //TCCR1B = ((1 << CS12) | (0 << CS11) | (0 << CS10) ); // 256 prescaler, 62.5khz => 1tick = 16us, full overflow time =  16.7s  //TIMSK1 |= (1 << TOIE1);  // enable timer overflow interrupt
-  interrupts();
+    //TCCR1B = ((0 << CS12) | (0 << CS11) | (1 << CS10) ); // 1 prescaler, 16MHz => 1tick = 0.0625us, full overflow time = 4ms
+    //TCCR1B = ((0 << CS12) | (1 << CS11) | (0 << CS10) ); // 8 prescaler, 2MHz => 1tick = 0.5us, full overflow time = 32ms
+    TCCR1B = ((0 << CS12) | (1 << CS11) | (1 << CS10) ); // 64 prescaler, 250khz => 1tick = 4us, full overflow time = 262ms
+    //TCCR1B = ((1 << CS12) | (0 << CS11) | (0 << CS10) ); // 256 prescaler, 62.5khz => 1tick = 16us, full overflow time =  16.7s  //TIMSK1 |= (1 << TOIE1);  // enable timer overflow interrupt
+  } interrupts();
 #endif
 }
 
@@ -104,10 +104,10 @@ void loop() {
     if (nibblesReceived != 0U ) {
       DEBUG_PRINT("Message resived\r\n");
 
-      noInterrupts();
-      process_radio_message((rxMessage_t*)inNibblesBuffer);
-      bufferReset();
-      interrupts();
+      noInterrupts(); {
+        process_radio_message((rxMessage_t*)inNibblesBuffer);
+        bufferReset();
+      } interrupts();
     }
   }
 }
@@ -142,20 +142,20 @@ void collectInputData() {
 
   if ( (elapsed_time > BIT_LOW_LEVEL_DURATION_MIN) && (elapsed_time < BIT_LOW_LEVEL_DURATION_MAX) ) {
     inNibblesBuffer[nibblesReceived] |= biteShiftMask;
-  } else {
-    DEBUG_PRINT("Long low pulse. Reset buffer.\r\n");
-    bufferReset();
-    return;
   }
 
   biteShiftMask >>= 1U;
 
   if (biteShiftMask == 0U) {
     biteShiftMask = NIBBLE_RESET_BIT_POS; //save one nibble to one byte
+    DEBUG_PRINT("RX nibble[");
+    DEBUG_PRINT(nNibblesBuffer[nibblesReceived], HEX);
+    DEBUG_PRINT("]\r\n");
     ++nibblesReceived;
   }
 
   if (nibblesReceived >= IN_BUFFER_SIZE) {
+    DEBUG_PRINT("Beffer overfloaw, reset!");
     bufferReset();
   }
 }
@@ -197,15 +197,24 @@ void send_message(const uint8_t *message, const uint8_t lenght) {
   DEBUG_PRINT(lenght);
   DEBUG_PRINT("\r\n");
 
-  detachInterrupt(digitalPinToInterrupt(IO_PIN));
-  pinMode(IO_PIN, OUTPUT);
+  noInterrupts(); {
 
-  for (uint8_t i = 0; i < lenght; i++) {
-    send_nibble(message[i]);
-  }
+    do {
+      delay(10);
+    } while (digitalRead(IO_PIN) != HIGH);
 
-  pinMode(IO_PIN, IO_PIN_INPUT_MODE);
-  attachInterrupt(digitalPinToInterrupt(IO_PIN), collectInputData, CHANGE);
+    detachInterrupt(digitalPinToInterrupt(IO_PIN));
+    digitalWrite(IO_PIN, HIGH);
+    pinMode(IO_PIN, OUTPUT);
+
+    for (uint8_t i = 0; i < lenght; i++) {
+      send_nibble(message[i]);
+    }
+
+    pinMode(IO_PIN, IO_PIN_INPUT_MODE);
+    attachInterrupt(digitalPinToInterrupt(IO_PIN), collectInputData, CHANGE);
+
+  } interrupts();
 }
 
 
@@ -217,7 +226,7 @@ void process_radio_message(const rxMessage_t *message) {
 
   if (message->command == Command_AnyBodyHome) {
     DEBUG_PRINT("Any body home msg\r\n");
-    
+
     send_message(TAPECMD_POWER_ON, sizeof(TAPECMD_POWER_ON));
     delay(8);
     send_message(TAPECMD_CASSETE_PRESENT, sizeof(TAPECMD_CASSETE_PRESENT));
