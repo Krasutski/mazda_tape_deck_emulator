@@ -86,6 +86,8 @@ void setup() {
   Serial.begin(9600);
 #endif
 
+  DEBUG_PRINT("Init....\r\n");
+
 #ifdef USE_TIMER1
   noInterrupts(); {
     TCCR1A = 0;
@@ -103,10 +105,15 @@ void loop() {
   if (rx_time_ms >= (millis() - RX_TIMEOUT_MS)) {
     if (nibblesReceived != 0U ) {
       DEBUG_PRINT("Message resived\r\n");
+      DEBUG_PRINT("Len=");
+      DEBUG_PRINT(nibblesReceived);
+      DEBUG_PRINT("\r\n");
 
       noInterrupts(); {
         process_radio_message((rxMessage_t*)inNibblesBuffer);
         bufferReset();
+
+        rx_time_ms = millis();
       } interrupts();
     }
   }
@@ -142,6 +149,17 @@ void collectInputData() {
 
   if ( (elapsed_time > BIT_LOW_LEVEL_DURATION_MIN) && (elapsed_time < BIT_LOW_LEVEL_DURATION_MAX) ) {
     inNibblesBuffer[nibblesReceived] |= biteShiftMask;
+  } else if (elapsed_time > BIT_LOW_LEVEL_DURATION_MAX) {
+    DEBUG_PRINT("Unexpected pulse len=");
+    DEBUG_PRINT(elapsed_time); 
+    DEBUG_PRINT("\r\n");
+    DEBUG_PRINT(" Bit="); 
+    DEBUG_PRINT(biteShiftMask);
+    DEBUG_PRINT(" Byte="); 
+    DEBUG_PRINT(nibblesReceived);
+    DEBUG_PRINT(" Reset buffer.\r\n");
+    bufferReset();
+    return;
   }
 
   biteShiftMask >>= 1U;
@@ -155,7 +173,7 @@ void collectInputData() {
   }
 
   if (nibblesReceived >= IN_BUFFER_SIZE) {
-    DEBUG_PRINT("Beffer overfloaw, reset!");
+    DEBUG_PRINT("Buffer overflow, reset!");
     bufferReset();
   }
 }
@@ -239,6 +257,8 @@ void process_radio_message(const rxMessage_t *message) {
     send_message(TAPECMD_STOPPED, sizeof(TAPECMD_STOPPED));
   } else {
     DEBUG_PRINT("another msg\r\n");
+    DEBUG_PRINT(message->command); 
+    DEBUG_PRINT("\r\n");
 
     send_message(TAPECMD_PLAYING, sizeof(TAPECMD_PLAYING));
     delay(7);
