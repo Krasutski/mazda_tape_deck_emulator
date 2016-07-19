@@ -23,7 +23,7 @@
 //Constants
 #define IO_PIN_INPUT_MODE (INPUT_PULLUP) //INPUT_PULLUP OUTPUT INPUT
 
-#define RX_TIMEOUT_MS   8U
+#define RX_TIMEOUT_MS   12U
 #define IN_BUFFER_SIZE  16U
 
 #define NIBBLE_RESET_BIT_POS   0x08
@@ -102,15 +102,19 @@ void setup() {
 }
 
 void loop() {
-  if (rx_time_ms >= (millis() - RX_TIMEOUT_MS)) {
+
+  if ( ( millis() - rx_time_ms ) > RX_TIMEOUT_MS) {
     if (nibblesReceived != 0U ) {
-      DEBUG_PRINT("Message resived\r\n");
-      DEBUG_PRINT("Len=");
+      DEBUG_PRINT("\r\nLen=");
       DEBUG_PRINT(nibblesReceived);
-      DEBUG_PRINT("\r\n");
+      DEBUG_PRINT(" >> ");
 
       noInterrupts(); {
         process_radio_message((rxMessage_t*)inNibblesBuffer);
+        for (int i = 0; i < nibblesReceived; i++) {
+          DEBUG_PRINT(inNibblesBuffer[i], HEX);
+        }
+        DEBUG_PRINT("\r\n");
         bufferReset();
 
         rx_time_ms = millis();
@@ -149,26 +153,12 @@ void collectInputData() {
 
   if ( (elapsed_time > BIT_LOW_LEVEL_DURATION_MIN) && (elapsed_time < BIT_LOW_LEVEL_DURATION_MAX) ) {
     inNibblesBuffer[nibblesReceived] |= biteShiftMask;
-  } else if (elapsed_time > BIT_LOW_LEVEL_DURATION_MAX) {
-    DEBUG_PRINT("Unexpected pulse len=");
-    DEBUG_PRINT(elapsed_time); 
-    DEBUG_PRINT("\r\n");
-    DEBUG_PRINT(" Bit="); 
-    DEBUG_PRINT(biteShiftMask);
-    DEBUG_PRINT(" Byte="); 
-    DEBUG_PRINT(nibblesReceived);
-    DEBUG_PRINT(" Reset buffer.\r\n");
-    bufferReset();
-    return;
   }
 
   biteShiftMask >>= 1U;
 
   if (biteShiftMask == 0U) {
     biteShiftMask = NIBBLE_RESET_BIT_POS; //save one nibble to one byte
-    DEBUG_PRINT("RX nibble[");
-    DEBUG_PRINT(nNibblesBuffer[nibblesReceived], HEX);
-    DEBUG_PRINT("]\r\n");
     ++nibblesReceived;
   }
 
@@ -257,7 +247,7 @@ void process_radio_message(const rxMessage_t *message) {
     send_message(TAPECMD_STOPPED, sizeof(TAPECMD_STOPPED));
   } else {
     DEBUG_PRINT("another msg\r\n");
-    DEBUG_PRINT(message->command); 
+    DEBUG_PRINT(message->command);
     DEBUG_PRINT("\r\n");
 
     send_message(TAPECMD_PLAYING, sizeof(TAPECMD_PLAYING));
