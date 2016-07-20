@@ -1,18 +1,11 @@
 //Configuration
 
-//#define USE_TIMER1
-
 #define ENABLE_DEBUG_OUTPUT
 
 //Depended parameters
 
-#ifdef USE_TIMER1
-#define BIT_LOW_LEVEL_DURATION_MIN  (350) //value in timer ticks, 1tiks=4us, 1400/4 = 350
-#define BIT_LOW_LEVEL_DURATION_MAX  (500) //value in timer ticks, 1tiks=4us, 2000/4 = 500
-#else
 #define BIT_LOW_LEVEL_DURATION_MIN  (1400)  //value in us
 #define BIT_LOW_LEVEL_DURATION_MAX  (2000)  //value in us
-#endif
 
 #ifdef ENABLE_DEBUG_OUTPUT
 #define DEBUG_PRINT(...)  if(Serial){ Serial.print(__VA_ARGS__); }
@@ -96,18 +89,6 @@ void setup() {
 #endif
 
   DEBUG_PRINT("Init....\r\n");
-
-#ifdef USE_TIMER1
-  noInterrupts(); {
-    TCCR1A = 0;
-    TCNT1 = 0;
-
-    //TCCR1B = ((0 << CS12) | (0 << CS11) | (1 << CS10) ); // 1 prescaler, 16MHz => 1tick = 0.0625us, full overflow time = 4ms
-    //TCCR1B = ((0 << CS12) | (1 << CS11) | (0 << CS10) ); // 8 prescaler, 2MHz => 1tick = 0.5us, full overflow time = 32ms
-    TCCR1B = ((0 << CS12) | (1 << CS11) | (1 << CS10) ); // 64 prescaler, 250khz => 1tick = 4us, full overflow time = 262ms
-    //TCCR1B = ((1 << CS12) | (0 << CS11) | (0 << CS10) ); // 256 prescaler, 62.5khz => 1tick = 16us, full overflow time =  16.7s  //TIMSK1 |= (1 << TOIE1);  // enable timer overflow interrupt
-  } interrupts();
-#endif
 }
 
 void loop() {
@@ -148,19 +129,12 @@ void bufferReset() {
 void collectInputData() {
   uint32_t elapsed_time = 0;
 
-#ifdef USE_TIMER1
-  elapsed_time = TCNT1;
-#else
   // calculate pulse time
   elapsed_time = micros() - rx_time_us;
   rx_time_us = micros();
-#endif
   rx_time_ms = millis();
 
   if (digitalRead(IO_PIN) == LOW) {
-#ifdef USE_TIMER1
-    TCNT1 = 0;
-#endif
     return;
   }
 
