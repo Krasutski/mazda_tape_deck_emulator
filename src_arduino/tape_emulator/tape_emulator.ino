@@ -16,12 +16,13 @@
 //Constants
 #define IO_PIN_INPUT_MODE (INPUT_PULLUP) //INPUT_PULLUP OUTPUT INPUT
 
-#define RX_TIMEOUT_US   12000U
-#define IN_BUFFER_SIZE  96U
+#define RX_TIMEOUT_US           12000U
+#define IN_BUFFER_SIZE          96U
 
-#define NIBBLE_RESET_BIT_POS   0x08
+#define NIBBLE_RESET_BIT_POS    0x08
 
-#define IO_PIN 3U
+#define IO_PIN                  3U
+#define MIC_PIN                 2U
 
 /* message mustbe aligned to bytes*/
 typedef struct rxMessage {
@@ -59,6 +60,14 @@ typedef enum SubConmmandPlayback_e {
   Playback_Stop = 0x60
 } SubConmmandPlayback_t;
 
+typedef enum Jack35Control_e {
+  Jack35_ShortPress,
+  Jack35_LongPress,
+  Jack35_DoublePress,
+  Jack35_VolUp,
+  Jack35_VolDown,
+} Jack35Control_t;
+
 // data present in nibbles, byte equal nibble
 //Wakeup notification
 const uint8_t TAPECMD_POWER_ON[] =        {0x08, 0x08, 0x01, 0x02};         //Wake up notification
@@ -80,6 +89,8 @@ static uint8_t biteShiftMask = NIBBLE_RESET_BIT_POS;
 static uint32_t rx_time_us = 0;
 
 void setup() {
+  pinMode(MIC_PIN, INPUT);
+
   pinMode(IO_PIN, IO_PIN_INPUT_MODE);
   attachInterrupt(digitalPinToInterrupt(IO_PIN), collectInputData, CHANGE);
 
@@ -243,8 +254,10 @@ void process_radio_message(const rxMessage_t *message) {
           send_message(TAPECMD_PLAYING, sizeof(TAPECMD_PLAYING));
           send_message(TAPECMD_PLAYBACK, sizeof(TAPECMD_PLAYBACK));
         } else if (subCmd == Playback_FF) {
+          Jack35Control(Jack35_ShortPress);
           send_message(TAPECMD_PLAYBACK, sizeof(TAPECMD_PLAYBACK));
         } else if (subCmd == Playback_REW) {
+          Jack35Control(Jack35_DoublePress);
           send_message(TAPECMD_PLAYBACK, sizeof(TAPECMD_PLAYBACK));
         } else if (subCmd == Playback_Stop) {
           send_message(TAPECMD_STOPPED, sizeof(TAPECMD_STOPPED));
@@ -267,4 +280,48 @@ void process_radio_message(const rxMessage_t *message) {
       DEBUG_PRINT("\r\n");
       break;
   }
+}
+
+void Jack35Control(Jack35Control_t event) {
+  pinMode(MIC_PIN, OUTPUT);
+
+  switch (event) {
+    case   Jack35_ShortPress:
+      DEBUG_PRINT("Jack35_ShortPress\r\n");
+      digitalWrite(MIC_PIN, LOW);
+      delay(500);
+      digitalWrite(MIC_PIN, HIGH);
+      break;
+    case Jack35_LongPress:
+      DEBUG_PRINT("Jack35_LongPress\r\n");
+      digitalWrite(MIC_PIN, LOW);
+      delay(2500);
+      digitalWrite(MIC_PIN, HIGH);
+      break;
+    case Jack35_DoublePress:
+      DEBUG_PRINT("Jack35_DoublePress\r\n");
+      digitalWrite(MIC_PIN, LOW);
+      delay(200);
+      digitalWrite(MIC_PIN, HIGH);
+      delay(250);
+      digitalWrite(MIC_PIN, LOW);
+      delay(200);
+      digitalWrite(MIC_PIN, HIGH);
+      break;
+    case Jack35_VolUp:
+      DEBUG_PRINT("Jack35_VolUp\r\n");
+      //don't implemeted hardware, see spetification
+      //Wired Audio Headset Specification (v1.1)
+      break;
+    case Jack35_VolDown:
+      DEBUG_PRINT("Jack35_VolDown\r\n");
+      //don't implemeted hardware, see spetification
+      //Wired Audio Headset Specification (v1.1)
+      break;
+    default:
+      DEBUG_PRINT("Jack35 unckon argument");
+      break;
+  }
+
+  pinMode(MIC_PIN, INPUT);
 }
