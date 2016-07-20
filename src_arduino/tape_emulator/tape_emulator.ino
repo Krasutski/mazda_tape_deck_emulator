@@ -1,8 +1,8 @@
 //Configuration
 
-#define USE_TIMER1
+//#define USE_TIMER1
 
-//#define ENABLE_DEBUG_OUTPUT
+#define ENABLE_DEBUG_OUTPUT
 
 //Depended parameters
 
@@ -24,7 +24,7 @@
 #define IO_PIN_INPUT_MODE (INPUT_PULLUP) //INPUT_PULLUP OUTPUT INPUT
 
 #define RX_TIMEOUT_MS   12U
-#define IN_BUFFER_SIZE  16U
+#define IN_BUFFER_SIZE  96U
 
 #define NIBBLE_RESET_BIT_POS   0x08
 
@@ -105,19 +105,23 @@ void loop() {
 
   if ( ( millis() - rx_time_ms ) > RX_TIMEOUT_MS) {
     if (nibblesReceived != 0U ) {
-      DEBUG_PRINT("\r\nLen=");
-      DEBUG_PRINT(nibblesReceived);
-      DEBUG_PRINT(" >> ");
 
       noInterrupts(); {
-        process_radio_message((rxMessage_t*)inNibblesBuffer);
+        DEBUG_PRINT("RX[");
+        DEBUG_PRINT(nibblesReceived);
+        DEBUG_PRINT("]");
+
         for (int i = 0; i < nibblesReceived; i++) {
           DEBUG_PRINT(inNibblesBuffer[i], HEX);
         }
         DEBUG_PRINT("\r\n");
+
+        process_radio_message((rxMessage_t*)inNibblesBuffer);
+
         bufferReset();
 
         rx_time_ms = millis();
+
       } interrupts();
     }
   }
@@ -163,7 +167,7 @@ void collectInputData() {
   }
 
   if (nibblesReceived >= IN_BUFFER_SIZE) {
-    DEBUG_PRINT("Buffer overflow, reset!");
+    DEBUG_PRINT("Buffer overflow, reset!\r\n");
     bufferReset();
   }
 }
@@ -201,8 +205,14 @@ static void send_nibble(const uint8_t nibble) {
 
 // Send a message on the Mazda radio bus
 void send_message(const uint8_t *message, const uint8_t lenght) {
-  DEBUG_PRINT("Send message...");
+  DEBUG_PRINT("TX[");
   DEBUG_PRINT(lenght);
+  DEBUG_PRINT("] ");
+
+  for (int i = 0; i < lenght; i++) {
+    DEBUG_PRINT(((uint8_t*)message)[i], HEX);
+  }
+
   DEBUG_PRINT("\r\n");
 
   noInterrupts(); {
@@ -236,23 +246,34 @@ void process_radio_message(const rxMessage_t *message) {
     DEBUG_PRINT("Any body home msg\r\n");
 
     send_message(TAPECMD_POWER_ON, sizeof(TAPECMD_POWER_ON));
-    delay(8);
     send_message(TAPECMD_CASSETE_PRESENT, sizeof(TAPECMD_CASSETE_PRESENT));
-
   } else if (message->command == Command_WakeUp) {
     DEBUG_PRINT("Wake up msg\r\n");
 
     send_message(TAPECMD_CASSETE_PRESENT, sizeof(TAPECMD_CASSETE_PRESENT));
-    delay(10);
     send_message(TAPECMD_STOPPED, sizeof(TAPECMD_STOPPED));
+  } else if (message->command == Command_Control) {
+    if (message->data[0] == SubCommand_Playback) {
+      if (message->data[2] == 0x01) {
+        send_message(TAPECMD_PLAYING, sizeof(TAPECMD_PLAYING));
+        send_message(TAPECMD_PLAYBACK, sizeof(TAPECMD_PLAYBACK));
+      } else if (message->data[1] == 0x06) {
+        send_message(TAPECMD_STOPPED, sizeof(TAPECMD_STOPPED));
+      } else {
+        DEBUG_PRINT("PB MSG = ");
+        DEBUG_PRINT(message->data[2]);
+        DEBUG_PRINT("\r\n");
+      }
+    } else if (message->data[0] == SubCommand_SeekTrack) {
+      DEBUG_PRINT("SubCommand_SeekTrack Sub command\r\n");
+    } else if (message->data[0] == SubCommand_SetConfig) {
+      DEBUG_PRINT("SubCommand_SetConfig Sub command\r\n");
+    } else {
+      DEBUG_PRINT("UNCKNOWN Sub command\r\n");
+    }
   } else {
-    DEBUG_PRINT("another msg\r\n");
+    DEBUG_PRINT("another cmd = ");
     DEBUG_PRINT(message->command);
     DEBUG_PRINT("\r\n");
-
-    send_message(TAPECMD_PLAYING, sizeof(TAPECMD_PLAYING));
-    delay(7);
-    send_message(TAPECMD_PLAYBACK, sizeof(TAPECMD_PLAYBACK));
-    delay(7);
   }
 }
