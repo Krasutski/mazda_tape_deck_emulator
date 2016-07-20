@@ -59,12 +59,21 @@ typedef enum rxMessageSubCommand_e {
   SubCommand_SetConfig = 0x04
 } rxMessageSubCommand_t;
 
+typedef enum SubConmmandPlayback_e {
+  Playback_Play = 0x01,
+  Playback_FF = 0x04,
+  Playback_REW = 0x08,
+  Playback_Stop = 0x60
+} SubConmmandPlayback_t;
 
 // data present in nibbles, byte equal nibble
-const uint8_t TAPECMD_POWER_ON[] =        {0x08, 0x08, 0x01, 0x02};
-const uint8_t TAPECMD_STOPPED[] =         {0x08, 0x09, 0x00, 0x0C, 0x0E};
-const uint8_t TAPECMD_PLAYING[] =         {0x08, 0x09, 0x04, 0x01, 0x05};
-const uint8_t TAPECMD_SEEKING[] =         {0x08, 0x09, 0x05, 0x01, 0x06};
+//Wakeup notification
+const uint8_t TAPECMD_POWER_ON[] =        {0x08, 0x08, 0x01, 0x02};         //Wake up notification
+//Status messages: {target, command(status), arg1, arg2, checksum}
+const uint8_t TAPECMD_STOPPED[] =         {0x08, 0x09, 0x00, 0x0C, 0x0E};   //0 - Stopped, C - not use desk
+const uint8_t TAPECMD_PLAYING[] =         {0x08, 0x09, 0x04, 0x01, 0x05};   //4 - Playing, 1 - tape in use
+const uint8_t TAPECMD_SEEKING[] =         {0x08, 0x09, 0x05, 0x01, 0x06};   //5 - seeking, 1 - tape in use
+//Detailed status  {target, command(det. status), arg1, arg2, arg3, arg4, arg5, arg6, checksum}
 const uint8_t TAPECMD_CASSETE_PRESENT[] = {0x08, 0x0B, 0x09, 0x00, 0x04, 0x00, 0x00, 0x0C, 0x03};
 const uint8_t TAPECMD_PLAYBACK[] =        {0x08, 0x0B, 0x09, 0x00, 0x04, 0x00, 0x00, 0x01, 0x00};
 const uint8_t TAPECMD_RANDOM_PLAY[] =     {0x08, 0x0B, 0x09, 0x00, 0x06, 0x00, 0x00, 0x01, 0x0E};
@@ -242,38 +251,48 @@ void process_radio_message(const rxMessage_t *message) {
     return;
   }
 
-  if (message->command == Command_AnyBodyHome) {
-    DEBUG_PRINT("Any body home msg\r\n");
+  switch (message->command) {
+    case Command_AnyBodyHome:
+      DEBUG_PRINT("Any body home msg\r\n");
 
-    send_message(TAPECMD_POWER_ON, sizeof(TAPECMD_POWER_ON));
-    send_message(TAPECMD_CASSETE_PRESENT, sizeof(TAPECMD_CASSETE_PRESENT));
-  } else if (message->command == Command_WakeUp) {
-    DEBUG_PRINT("Wake up msg\r\n");
+      send_message(TAPECMD_POWER_ON, sizeof(TAPECMD_POWER_ON));
+      send_message(TAPECMD_CASSETE_PRESENT, sizeof(TAPECMD_CASSETE_PRESENT));
+      break;
+    case Command_WakeUp:
+      DEBUG_PRINT("Wake up msg\r\n");
 
-    send_message(TAPECMD_CASSETE_PRESENT, sizeof(TAPECMD_CASSETE_PRESENT));
-    send_message(TAPECMD_STOPPED, sizeof(TAPECMD_STOPPED));
-  } else if (message->command == Command_Control) {
-    if (message->data[0] == SubCommand_Playback) {
-      if (message->data[2] == 0x01) {
-        send_message(TAPECMD_PLAYING, sizeof(TAPECMD_PLAYING));
-        send_message(TAPECMD_PLAYBACK, sizeof(TAPECMD_PLAYBACK));
-      } else if (message->data[1] == 0x06) {
-        send_message(TAPECMD_STOPPED, sizeof(TAPECMD_STOPPED));
+      send_message(TAPECMD_CASSETE_PRESENT, sizeof(TAPECMD_CASSETE_PRESENT));
+      send_message(TAPECMD_STOPPED, sizeof(TAPECMD_STOPPED));
+      break;
+    case Command_Control:
+      if (message->data[0] == SubCommand_Playback) {
+        uint8_t subCmd = ((message->data[1] << 4U) & 0xF0) & (message->data[2] & 0x0F);
+        if (subCmd == Playback_Play) {
+          send_message(TAPECMD_PLAYING, sizeof(TAPECMD_PLAYING));
+          send_message(TAPECMD_PLAYBACK, sizeof(TAPECMD_PLAYBACK));
+        } else if (subCmd == Playback_FF) {
+          send_message(TAPECMD_PLAYBACK, sizeof(TAPECMD_PLAYBACK));
+        } else if (subCmd == Playback_REW) {
+          send_message(TAPECMD_PLAYBACK, sizeof(TAPECMD_PLAYBACK));
+        } else if (subCmd == Playback_Stop) {
+          send_message(TAPECMD_STOPPED, sizeof(TAPECMD_STOPPED));
+        } else {
+          DEBUG_PRINT("Playback MSG = ");
+          DEBUG_PRINT(message->data[2]);
+          DEBUG_PRINT("\r\n");
+        }
+      } else if (message->data[0] == SubCommand_SeekTrack) {
+        DEBUG_PRINT("SubCommand_SeekTrack Sub command\r\n");
+      } else if (message->data[0] == SubCommand_SetConfig) {
+        DEBUG_PRINT("SubCommand_SetConfig Sub command\r\n");
       } else {
-        DEBUG_PRINT("PB MSG = ");
-        DEBUG_PRINT(message->data[2]);
-        DEBUG_PRINT("\r\n");
+        DEBUG_PRINT("UNCKNOWN Sub command\r\n");
       }
-    } else if (message->data[0] == SubCommand_SeekTrack) {
-      DEBUG_PRINT("SubCommand_SeekTrack Sub command\r\n");
-    } else if (message->data[0] == SubCommand_SetConfig) {
-      DEBUG_PRINT("SubCommand_SetConfig Sub command\r\n");
-    } else {
-      DEBUG_PRINT("UNCKNOWN Sub command\r\n");
-    }
-  } else {
-    DEBUG_PRINT("another cmd = ");
-    DEBUG_PRINT(message->command);
-    DEBUG_PRINT("\r\n");
+      break;
+    default:
+      DEBUG_PRINT("another cmd = ");
+      DEBUG_PRINT(message->command);
+      DEBUG_PRINT("\r\n");
+      break;
   }
 }

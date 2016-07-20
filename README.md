@@ -1,7 +1,12 @@
-# Mazda tape deck emulator
-A Tape Deck Emulator
+#Mazda tape deck emulator
 
-Implementation Tape emulator on arduino nano.
+Tape Deck Emulator for Mazda 6 up to 2006 year (with MD/TAPE button). Use this emulator for implement AUX instead of tape. 
 
+##Software
 
-Based on: http://nikosapi.org/w/index.php/MazdaSpoof_-_A_Tape_Deck_Emulator
+Code based on protocol provided from [http:\\\\nikosapi.org](http://nikosapi.org/w/index.php/Mazda_Entertainment_System_-_Bus_Protocol).
+
+##Hardware
+
+Implementation Tape emulator based on [Arduino micro pro 5V](https://www.sparkfun.com/products/11098) and power converter(12v to 5v).
+
