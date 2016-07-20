@@ -16,7 +16,7 @@
 //Constants
 #define IO_PIN_INPUT_MODE (INPUT_PULLUP) //INPUT_PULLUP OUTPUT INPUT
 
-#define RX_TIMEOUT_MS   12U
+#define RX_TIMEOUT_US   12000U
 #define IN_BUFFER_SIZE  96U
 
 #define NIBBLE_RESET_BIT_POS   0x08
@@ -78,7 +78,6 @@ static uint8_t inNibblesBuffer[IN_BUFFER_SIZE] = {0U};
 static uint8_t nibblesReceived = 0;
 static uint8_t biteShiftMask = NIBBLE_RESET_BIT_POS;
 static uint32_t rx_time_us = 0;
-static uint32_t rx_time_ms = 0;
 
 void setup() {
   pinMode(IO_PIN, IO_PIN_INPUT_MODE);
@@ -93,7 +92,7 @@ void setup() {
 
 void loop() {
 
-  if ( ( millis() - rx_time_ms ) > RX_TIMEOUT_MS) {
+  if ( ( micros() - rx_time_us ) > RX_TIMEOUT_US) {
     if (nibblesReceived != 0U ) {
 
       noInterrupts(); {
@@ -110,7 +109,7 @@ void loop() {
 
         bufferReset();
 
-        rx_time_ms = millis();
+        rx_time_us = micros();
 
       } interrupts();
     }
@@ -132,7 +131,6 @@ void collectInputData() {
   // calculate pulse time
   elapsed_time = micros() - rx_time_us;
   rx_time_us = micros();
-  rx_time_ms = millis();
 
   if (digitalRead(IO_PIN) == LOW) {
     return;
