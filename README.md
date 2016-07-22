@@ -26,4 +26,8 @@ Connecting diagram:
 
 
 Best Regards, 
+
 Denis Krasutski
+
+dkrasutski@gmail.com
+
