@@ -8,12 +8,6 @@ Project implemented in Arduino environment and provide as "Arduino sketch".
 
 Description on protocol found here [http:\\\\nikosapi.org](http://nikosapi.org/w/index.php/Mazda_Entertainment_System_-_Bus_Protocol). Thanks to Nikosapi!
 
-###Folder tree
-[...]
-
-    [doc] - folder contain documentation on hardvade and how to use it.
-    
-    [src] - folder contain arduino sketch
 
 ##Hardware
 
