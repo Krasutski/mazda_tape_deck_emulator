@@ -8,5 +8,6 @@ Code based on protocol provided from [http:\\\\nikosapi.org](http://nikosapi.org
 
 ##Hardware
 
-Implementation Tape emulator based on [Arduino micro pro 5V](https://www.sparkfun.com/products/11098) and power converter(12v to 5v).
+Implementation the tape emulator based on [Arduino micro pro 5V](https://www.sparkfun.com/products/11098) hardware. This device is popular and is available in almost any electrical store also easy to programming.
 
+The device used 5V for powered and easy way to get it this use readymade board with LM7805 voltage regulator(analogue L7805, 78L05, REG1117-5, AMS1117-5 ) or simular boards also you can use board from "cigarette lighter to USB" device. I am using part of the __"MB102 Breadboard Power Supply Module 3.3V 5V"__ board, just google it.
