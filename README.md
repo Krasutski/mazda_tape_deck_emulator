@@ -1,6 +1,7 @@
 #Mazda tape deck emulator
 
-Tape Deck Emulator for Mazda 6 up to 2006 year (with MD/TAPE button). Use this emulator for implement AUX instead of tape. 
+Tape Deck Emulator for Mazda 6 up to 2006 year (with MD/TAPE button). After connect this device to tape connector audio system will swich device (via TAPE/MD button) to "Tape mode" and you can use tape audio signals for playing external audio sources.
+This emulator well suited for implement AUX functionality (of course instead of tape).
 
 ##Software
 
