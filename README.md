@@ -26,7 +26,7 @@ Connecting diagram:
 ![Mazda tape deck emulator schematics](https://github.com/Krasutski/mazda_tape_deck_emulator/blob/master/doc/mazda_tape_emulator_connecting.png)
 
 ###Compatibility:
-Solution shold be work on all devices with button "TAPE\MD".
+Solution shold be work on all devices with button "TAPE\MD".  
 Tested:
  * Mazda 6 2005 3.0L
 
