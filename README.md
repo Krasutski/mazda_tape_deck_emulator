@@ -8,6 +8,11 @@ Project implemented in Arduino environment and provide as "Arduino sketch".
 
 Description on protocol found here [http:\\\\nikosapi.org](http://nikosapi.org/w/index.php/Mazda_Entertainment_System_-_Bus_Protocol). Thanks to Nikosapi!
 
+###Folder tree
+[...]
+    [doc] - folder contain documentation on hardvade and how to use it.
+    [src] - folder contain arduino sketch
+
 ##Hardware
 
 Implementation the tape emulator based on the [Arduino micro pro 5V](https://www.sparkfun.com/products/11098) hardware. This device is popular and available in any electrical store also easy to programming.
