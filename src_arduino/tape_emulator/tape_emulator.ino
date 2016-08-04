@@ -16,8 +16,8 @@
 //Constants
 #define IO_PIN_INPUT_MODE (INPUT_PULLUP) //INPUT_PULLUP OUTPUT INPUT
 
-#define RX_TIMEOUT_US           12000U
-#define IN_BUFFER_SIZE          96U
+#define RX_TIMEOUT_MS   12U
+#define IN_BUFFER_SIZE  96U
 
 #define NIBBLE_RESET_BIT_POS    0x08
 
@@ -60,6 +60,13 @@ typedef enum SubConmmandPlayback_e {
   Playback_Stop = 0x60
 } SubConmmandPlayback_t;
 
+typedef enum SubCommandSetConfig_e {
+  SetConfig_RepeatMode = 0x01,
+  SetConfig_RandomMode = 0x02,
+  SetConfig_FastForwarding = 0x10,
+  SetConfig_FastRewinding = 0x20
+} SubCommandSetConfig_t;
+
 typedef enum Jack35Control_e {
   Jack35_ShortPress,
   Jack35_LongPress,
@@ -87,7 +94,7 @@ static uint8_t inNibblesBuffer[IN_BUFFER_SIZE] = {0U};
 static uint8_t nibblesReceived = 0;
 static uint8_t biteShiftMask = NIBBLE_RESET_BIT_POS;
 static uint32_t rx_time_us = 0;
-
+static uint32_t rx_time_ms = 0;
 void setup() {
   pinMode(MIC_PIN, INPUT);
 
@@ -103,13 +110,13 @@ void setup() {
 
 void loop() {
 
-  if ( ( micros() - rx_time_us ) > RX_TIMEOUT_US) {
+  if ( ( millis() - rx_time_ms ) > RX_TIMEOUT_MS) {
     if (nibblesReceived != 0U ) {
 
       noInterrupts(); {
         DEBUG_PRINT("RX[");
         DEBUG_PRINT(nibblesReceived);
-        DEBUG_PRINT("]");
+        DEBUG_PRINT("] ");
 
         for (int i = 0; i < nibblesReceived; i++) {
           DEBUG_PRINT(inNibblesBuffer[i], HEX);
@@ -120,7 +127,7 @@ void loop() {
 
         bufferReset();
 
-        rx_time_us = micros();
+        rx_time_ms = millis();
 
       } interrupts();
     }
@@ -142,6 +149,7 @@ void collectInputData() {
   // calculate pulse time
   elapsed_time = micros() - rx_time_us;
   rx_time_us = micros();
+  rx_time_ms = millis();
 
   if (digitalRead(IO_PIN) == LOW) {
     return;
@@ -249,27 +257,44 @@ void process_radio_message(const rxMessage_t *message) {
       break;
     case Command_Control:
       if (message->data[0] == SubCommand_Playback) {
-        uint8_t subCmd = ((message->data[1] << 4U) & 0xF0) & (message->data[2] & 0x0F);
+        uint8_t subCmd = ((message->data[1] << 4U) & 0xF0) | (message->data[2] & 0x0F);
         if (subCmd == Playback_Play) {
+          DEBUG_PRINT("Playback MSG = Playback_Play\r\n");
           send_message(TAPECMD_PLAYING, sizeof(TAPECMD_PLAYING));
           send_message(TAPECMD_PLAYBACK, sizeof(TAPECMD_PLAYBACK));
         } else if (subCmd == Playback_FF) {
           Jack35Control(Jack35_ShortPress);
+          DEBUG_PRINT("Playback MSG = Playback_FF\r\n");
           send_message(TAPECMD_PLAYBACK, sizeof(TAPECMD_PLAYBACK));
         } else if (subCmd == Playback_REW) {
           Jack35Control(Jack35_DoublePress);
+          DEBUG_PRINT("Playback MSG = Playback_REW\r\n");
           send_message(TAPECMD_PLAYBACK, sizeof(TAPECMD_PLAYBACK));
         } else if (subCmd == Playback_Stop) {
+          DEBUG_PRINT("Playback MSG = Playback_Stop\r\n");
           send_message(TAPECMD_STOPPED, sizeof(TAPECMD_STOPPED));
         } else {
           DEBUG_PRINT("Playback MSG = ");
-          DEBUG_PRINT(message->data[2]);
+          DEBUG_PRINT(subCmd);
           DEBUG_PRINT("\r\n");
         }
       } else if (message->data[0] == SubCommand_SeekTrack) {
-        DEBUG_PRINT("SubCommand_SeekTrack Sub command\r\n");
+        DEBUG_PRINT("SubCommand_SeekTrack\r\n");
       } else if (message->data[0] == SubCommand_SetConfig) {
-        DEBUG_PRINT("SubCommand_SetConfig Sub command\r\n");
+        uint8_t subCmd = ((message->data[1] << 4U) & 0xF0) | (message->data[2] & 0x0F);
+        if ( subCmd == SetConfig_RepeatMode) {
+          DEBUG_PRINT("SetConfig_RepeatMode\r\n");
+        } else if ( subCmd == SetConfig_RandomMode) {
+          DEBUG_PRINT("SetConfig_RandomMode\r\n");
+        } else if ( subCmd == SetConfig_FastForwarding) {
+          DEBUG_PRINT("SetConfig_FastForwarding\r\n");
+        } else if ( subCmd == SetConfig_FastRewinding ) {
+          DEBUG_PRINT("SetConfig_FastRewinding\r\n");
+        } else {
+          DEBUG_PRINT("SubCommand_SetConfig = ");
+          DEBUG_PRINT(subCmd);
+          DEBUG_PRINT("\r\n");
+        }
       } else {
         DEBUG_PRINT("UNCKNOWN Sub command\r\n");
       }
