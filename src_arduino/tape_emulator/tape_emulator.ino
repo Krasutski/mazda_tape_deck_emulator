@@ -14,15 +14,16 @@
 #endif
 
 //Constants
-#define IO_PIN_INPUT_MODE (INPUT_PULLUP) //INPUT_PULLUP OUTPUT INPUT
+#define TYPE_IO_PIN_INPUT_MODE          (INPUT_PULLUP)
+#define TYPE_IO_PIN                     3U
 
-#define RX_TIMEOUT_MS   12U
-#define IN_BUFFER_SIZE  96U
+#define MIC_PIN                         2U
 
-#define NIBBLE_RESET_BIT_POS    0x08
+#define RX_TIMEOUT_MS                   12U
+#define IN_BUFFER_SIZE                  96U
 
-#define IO_PIN                  3U
-#define MIC_PIN                 2U
+#define NIBBLE_RESET_BIT_POS            0x08
+
 
 /* message mustbe aligned to bytes*/
 typedef struct rxMessage {
@@ -98,8 +99,8 @@ static uint32_t rx_time_ms = 0;
 void setup() {
   pinMode(MIC_PIN, INPUT);
 
-  pinMode(IO_PIN, IO_PIN_INPUT_MODE);
-  attachInterrupt(digitalPinToInterrupt(IO_PIN), collectInputData, CHANGE);
+  pinMode(TYPE_IO_PIN, TYPE_IO_PIN_INPUT_MODE);
+  attachInterrupt(digitalPinToInterrupt(TYPE_IO_PIN), collectInputData, CHANGE);
 
 #ifdef ENABLE_DEBUG_OUTPUT
   Serial.begin(9600);
@@ -151,7 +152,7 @@ void collectInputData() {
   rx_time_us = micros();
   rx_time_ms = millis();
 
-  if (digitalRead(IO_PIN) == LOW) {
+  if (digitalRead(TYPE_IO_PIN) == LOW) {
     return;
   }
 
@@ -178,7 +179,7 @@ static void send_nibble(const uint8_t nibble) {
 
   while (nibbleShiftMask != 0U) {
     // Pull the bus down
-    digitalWrite(IO_PIN, LOW);
+    digitalWrite(TYPE_IO_PIN, LOW);
 
     bit_value = nibble & nibbleShiftMask;
 
@@ -190,7 +191,7 @@ static void send_nibble(const uint8_t nibble) {
     }
 
     // Release the bus
-    digitalWrite(IO_PIN, HIGH);
+    digitalWrite(TYPE_IO_PIN, HIGH);
 
     //End logic pause
     if (bit_value) {
@@ -219,18 +220,18 @@ void send_message(const uint8_t *message, const uint8_t lenght) {
 
     do {
       delay(10);
-    } while (digitalRead(IO_PIN) != HIGH);
+    } while (digitalRead(TYPE_IO_PIN) != HIGH);
 
-    detachInterrupt(digitalPinToInterrupt(IO_PIN));
-    digitalWrite(IO_PIN, HIGH);
-    pinMode(IO_PIN, OUTPUT);
+    detachInterrupt(digitalPinToInterrupt(TYPE_IO_PIN));
+    digitalWrite(TYPE_IO_PIN, HIGH);
+    pinMode(TYPE_IO_PIN, OUTPUT);
 
     for (uint8_t i = 0; i < lenght; i++) {
       send_nibble(message[i]);
     }
 
-    pinMode(IO_PIN, IO_PIN_INPUT_MODE);
-    attachInterrupt(digitalPinToInterrupt(IO_PIN), collectInputData, CHANGE);
+    pinMode(TYPE_IO_PIN, TYPE_IO_PIN_INPUT_MODE);
+    attachInterrupt(digitalPinToInterrupt(TYPE_IO_PIN), collectInputData, CHANGE);
 
   } interrupts();
 }
