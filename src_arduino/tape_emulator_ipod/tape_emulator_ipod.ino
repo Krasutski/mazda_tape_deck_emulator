@@ -17,8 +17,6 @@
 #define TYPE_IO_PIN_INPUT_MODE          (INPUT_PULLUP)
 #define TYPE_IO_PIN                     3U
 
-#define MIC_PIN                         2U
-
 #define RX_TIMEOUT_MS                   12U
 #define IN_BUFFER_SIZE                  96U
 
@@ -68,13 +66,45 @@ typedef enum SubCommandSetConfig_e {
   SetConfig_FastRewinding = 0x20
 } SubCommandSetConfig_t;
 
-typedef enum Jack35Control_e {
-  Jack35_ShortPress,
-  Jack35_LongPress,
-  Jack35_DoublePress,
-  Jack35_VolUp,
-  Jack35_VolDown,
-} Jack35Control_t;
+typedef enum IpodControl_e {
+  Ipod_Play,
+  Ipod_Pause,
+  Ipod_Next,
+  Ipod_Prev,
+  Ipod_On,
+  Ipod_Off,
+  Ipod_Shuffle,
+  Ipod_Repeat,
+  Ipod_SeekForward,
+  Ipod_SeekBackward,
+  Ipod_SeekStop,
+} IpodControl_t;
+
+typedef struct {
+  uint8_t mode;
+  uint8_t command_h;
+  uint8_t command_l;
+  uint8_t parameters[4];
+  uint8_t param_len;
+  uint8_t checksum;
+} const ipod_command;
+
+// See: http://ipodlinux.org/wiki/Apple_Accessory_Protocol
+// checksum: 0x100 - ((0x03 + mode + command_l + command_h
+//                     + parameters + param_len) & 0xff)
+ipod_command IPOD_REMOTE_MODE       = { 0x00, 0x01, 0x02, {}, 0, 0xfa };
+ipod_command IPOD_BUTTON_RELEASED   = { 0x02, 0x00, 0x00, {}, 0, 0xfb };
+ipod_command IPOD_PLAY_PAUSE        = { 0x02, 0x00, 0x01, {}, 0, 0xfa };
+ipod_command IPOD_PLAY          = { 0x02, 0x00, 0x00, {0x01}, 1, 0xf9 };
+ipod_command IPOD_PAUSE         = { 0x02, 0x00, 0x00, {0x02}, 1, 0xf8 };
+ipod_command IPOD_STOP              = { 0x02, 0x00, 0x80, {}, 0, 0x7b };
+ipod_command IPOD_NEXT              = { 0x02, 0x00, 0x08, {}, 0, 0xf3 };
+ipod_command IPOD_PREV              = { 0x02, 0x00, 0x10, {}, 0, 0xeb };
+ipod_command IPOD_ON      = { 0x02, 0x00, 0x00, {0x00, 0x08}, 2, 0xf1 };
+ipod_command IPOD_OFF     = { 0x02, 0x00, 0x00, {0x00, 0x04}, 2, 0xf5 };
+ipod_command IPOD_MUTE          = { 0x02, 0x00, 0x00, {0x04}, 1, 0xf6 };
+ipod_command IPOD_SHUFFLE       = { 0x02, 0x00, 0x00, {0x80}, 1, 0x7a };
+ipod_command IPOD_REPEAT  = { 0x02, 0x00, 0x00, {0x00, 0x01}, 2, 0xf8 };
 
 // data present in nibbles, byte equal nibble
 //Wakeup notification
@@ -96,8 +126,11 @@ static uint8_t nibblesReceived = 0;
 static uint8_t biteShiftMask = NIBBLE_RESET_BIT_POS;
 static uint32_t rx_time_us = 0;
 static uint32_t rx_time_ms = 0;
+
+static bool ipod_seeking = false;
+
+
 void setup() {
-  pinMode(MIC_PIN, INPUT);
 
   pinMode(TYPE_IO_PIN, TYPE_IO_PIN_INPUT_MODE);
   attachInterrupt(digitalPinToInterrupt(TYPE_IO_PIN), collectInputData, CHANGE);
@@ -264,11 +297,9 @@ void process_radio_message(const rxMessage_t *message) {
           send_message(TAPECMD_PLAYING, sizeof(TAPECMD_PLAYING));
           send_message(TAPECMD_PLAYBACK, sizeof(TAPECMD_PLAYBACK));
         } else if (subCmd == Playback_FF) {
-          Jack35Control(Jack35_ShortPress);
           DEBUG_PRINT("Playback MSG = Playback_FF\r\n");
           send_message(TAPECMD_PLAYBACK, sizeof(TAPECMD_PLAYBACK));
         } else if (subCmd == Playback_REW) {
-          Jack35Control(Jack35_DoublePress);
           DEBUG_PRINT("Playback MSG = Playback_REW\r\n");
           send_message(TAPECMD_PLAYBACK, sizeof(TAPECMD_PLAYBACK));
         } else if (subCmd == Playback_Stop) {
@@ -308,46 +339,113 @@ void process_radio_message(const rxMessage_t *message) {
   }
 }
 
-void Jack35Control(Jack35Control_t event) {
-  pinMode(MIC_PIN, OUTPUT);
+void send_byte( uint8_t c ) {
+  c = ~c;
+  // IPOD_STX_PORT &= ~_BV(IPOD_STX_BIT);   // start bit
+  for ( uint8_t i = 10; i; i-- ) {         // 10 bits
+    delayMicroseconds( 100 );                  // bit duration
+    if ( c & 1 ) {
+      // IPOD_STX_PORT &= ~_BV(IPOD_STX_BIT);    // data bit 0
+    } else {
+      // IPOD_STX_PORT |= _BV(IPOD_STX_BIT);     // data bit 1 or stop bit
+    }
+    c >>= 1;
+  }
+  delayMicroseconds(30); // Wait at least 10 us between bytes
+}
 
-  switch (event) {
-    case   Jack35_ShortPress:
-      DEBUG_PRINT("Jack35_ShortPress\r\n");
-      digitalWrite(MIC_PIN, LOW);
-      delay(500);
-      digitalWrite(MIC_PIN, HIGH);
-      break;
-    case Jack35_LongPress:
-      DEBUG_PRINT("Jack35_LongPress\r\n");
-      digitalWrite(MIC_PIN, LOW);
-      delay(2500);
-      digitalWrite(MIC_PIN, HIGH);
-      break;
-    case Jack35_DoublePress:
-      DEBUG_PRINT("Jack35_DoublePress\r\n");
-      digitalWrite(MIC_PIN, LOW);
-      delay(200);
-      digitalWrite(MIC_PIN, HIGH);
-      delay(250);
-      digitalWrite(MIC_PIN, LOW);
-      delay(200);
-      digitalWrite(MIC_PIN, HIGH);
-      break;
-    case Jack35_VolUp:
-      DEBUG_PRINT("Jack35_VolUp\r\n");
-      //don't implemeted hardware, see spetification
-      //Wired Audio Headset Specification (v1.1)
-      break;
-    case Jack35_VolDown:
-      DEBUG_PRINT("Jack35_VolDown\r\n");
-      //don't implemeted hardware, see spetification
-      //Wired Audio Headset Specification (v1.1)
-      break;
-    default:
-      DEBUG_PRINT("Jack35 unckon argument");
-      break;
+void _ipod_send_command( const ipod_command * command ) {
+  // Send the header
+  send_byte( 0xff );
+  send_byte( 0x55 );
+
+  // Total length
+  send_byte( 0x03 + pgm_read_byte(&command->param_len) );
+
+  // Mode byte
+  send_byte( pgm_read_byte(&command->mode) );
+
+  // Command word
+  send_byte( pgm_read_byte(&command->command_h) );
+  send_byte( pgm_read_byte(&command->command_l) );
+
+  // Send parameters
+  uint8_t i = 0;
+  while ( i < pgm_read_byte(&command->param_len) ) {
+    send_byte( pgm_read_byte(&command->parameters[i]) );
+    i++;
   }
 
-  pinMode(MIC_PIN, INPUT);
+  // Send the checksum
+  send_byte( pgm_read_byte(&command->checksum) );
+}
+
+void ipod_send_command(ipod_command * command) {
+
+  if (ipod_seeking) {
+    _ipod_send_command( &IPOD_BUTTON_RELEASED );
+    delay(5);
+    _ipod_send_command( &IPOD_BUTTON_RELEASED );
+    ipod_seeking = false;
+  }
+
+  _ipod_send_command( &IPOD_REMOTE_MODE );
+  for (uint8_t i = 0; i < 3; i++) {
+    _ipod_send_command( command );
+    delay(10);
+  }
+  _ipod_send_command( &IPOD_BUTTON_RELEASED );
+}
+
+void IpodControl(IpodControl_t event) {
+
+  switch (event) {
+    case Ipod_Play:
+      ipod_send_command(&IPOD_PLAY);
+      break;
+    case Ipod_Pause:
+      ipod_send_command(&IPOD_PAUSE);
+      break;
+    case Ipod_Next:
+      ipod_send_command(&IPOD_NEXT);
+      break;
+    case Ipod_Prev:
+      ipod_send_command(&IPOD_PREV);
+      break;
+    case Ipod_On:
+      ipod_send_command(&IPOD_ON);
+      break;
+    case Ipod_Off:
+      ipod_send_command(&IPOD_OFF);
+      break;
+    case Ipod_Shuffle:
+      ipod_send_command(&IPOD_SHUFFLE);
+      break;
+    case Ipod_Repeat:
+      ipod_send_command(&IPOD_REPEAT);
+      break;
+    case Ipod_SeekForward:
+      _ipod_send_command(&IPOD_REMOTE_MODE);
+      _ipod_send_command(&IPOD_NEXT);
+      delay(10);
+      _ipod_send_command(&IPOD_NEXT);
+      ipod_seeking = true;
+      break;
+    case Ipod_SeekBackward:
+      _ipod_send_command(&IPOD_REMOTE_MODE);
+      _ipod_send_command(&IPOD_PREV);
+      delay(10);
+      _ipod_send_command(&IPOD_PREV);
+      ipod_seeking = true;
+      break;
+    case Ipod_SeekStop:
+      _ipod_send_command( &IPOD_BUTTON_RELEASED );
+      delay(5);
+      _ipod_send_command( &IPOD_BUTTON_RELEASED );
+      ipod_seeking = false;
+      break;
+    default:
+      DEBUG_PRINT("Ipod unckown argument");
+      break;
+  }
 }
