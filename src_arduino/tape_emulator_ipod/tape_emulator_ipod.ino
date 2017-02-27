@@ -17,6 +17,8 @@
 #define TYPE_IO_PIN_INPUT_MODE          (INPUT_PULLUP)
 #define TYPE_IO_PIN                     3U
 
+#define IPOD_SERIAL_PIN                 4U
+
 #define RX_TIMEOUT_MS                   12U
 #define IN_BUFFER_SIZE                  96U
 
@@ -133,6 +135,8 @@ static bool ipod_seeking = false;
 void setup() {
 
   pinMode(TYPE_IO_PIN, TYPE_IO_PIN_INPUT_MODE);
+  pinMode(IPOD_SERIAL_PIN, OUTPUT);
+
   attachInterrupt(digitalPinToInterrupt(TYPE_IO_PIN), collectInputData, CHANGE);
 
 #ifdef ENABLE_DEBUG_OUTPUT
@@ -296,15 +300,19 @@ void process_radio_message(const rxMessage_t *message) {
           DEBUG_PRINT("Playback MSG = Playback_Play\r\n");
           send_message(TAPECMD_PLAYING, sizeof(TAPECMD_PLAYING));
           send_message(TAPECMD_PLAYBACK, sizeof(TAPECMD_PLAYBACK));
+          IpodControl(Ipod_Play);
         } else if (subCmd == Playback_FF) {
           DEBUG_PRINT("Playback MSG = Playback_FF\r\n");
           send_message(TAPECMD_PLAYBACK, sizeof(TAPECMD_PLAYBACK));
+          IpodControl(Ipod_Next);
         } else if (subCmd == Playback_REW) {
           DEBUG_PRINT("Playback MSG = Playback_REW\r\n");
           send_message(TAPECMD_PLAYBACK, sizeof(TAPECMD_PLAYBACK));
+          IpodControl(Ipod_Prev);
         } else if (subCmd == Playback_Stop) {
           DEBUG_PRINT("Playback MSG = Playback_Stop\r\n");
           send_message(TAPECMD_STOPPED, sizeof(TAPECMD_STOPPED));
+          IpodControl(Ipod_Pause);
         } else {
           DEBUG_PRINT("Playback MSG = ");
           DEBUG_PRINT(subCmd);
@@ -316,8 +324,10 @@ void process_radio_message(const rxMessage_t *message) {
         uint8_t subCmd = ((message->data[1] << 4U) & 0xF0) | (message->data[2] & 0x0F);
         if ( subCmd == SetConfig_RepeatMode) {
           DEBUG_PRINT("SetConfig_RepeatMode\r\n");
+          IpodControl(Ipod_Repeat);
         } else if ( subCmd == SetConfig_RandomMode) {
           DEBUG_PRINT("SetConfig_RandomMode\r\n");
+          IpodControl(Ipod_Shuffle);
         } else if ( subCmd == SetConfig_FastForwarding) {
           DEBUG_PRINT("SetConfig_FastForwarding\r\n");
         } else if ( subCmd == SetConfig_FastRewinding ) {
@@ -341,13 +351,14 @@ void process_radio_message(const rxMessage_t *message) {
 
 void send_byte( uint8_t c ) {
   c = ~c;
-  // IPOD_STX_PORT &= ~_BV(IPOD_STX_BIT);   // start bit
-  for ( uint8_t i = 10; i; i-- ) {         // 10 bits
-    delayMicroseconds( 100 );                  // bit duration
+
+  digitalWrite(TYPE_IO_PIN, LOW);
+  for ( uint8_t i = 10; i; i-- ) {            // 10 bits
+    delayMicroseconds( 100 );                 // bit duration
     if ( c & 1 ) {
-      // IPOD_STX_PORT &= ~_BV(IPOD_STX_BIT);    // data bit 0
+      digitalWrite(TYPE_IO_PIN, LOW);
     } else {
-      // IPOD_STX_PORT |= _BV(IPOD_STX_BIT);     // data bit 1 or stop bit
+      digitalWrite(TYPE_IO_PIN, HIGH);
     }
     c >>= 1;
   }
