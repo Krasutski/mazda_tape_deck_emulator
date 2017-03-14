@@ -23,7 +23,7 @@ Device allow use 4-pin audio jack in this case you get play control funtionality
 
 Connecting diagram:
 
-![Mazda tape deck emulator schematics](https://github.com/Krasutski/mazda_tape_deck_emulator/blob/master/doc/mazda_tape_emulator_connecting.png)
+![Mazda tape deck emulator schematics](https://github.com/Krasutski/mazda_tape_deck_emulator/blob/master/doc/mazda_tape_emulator_jack_3_5_connecting.png)
 
 ###Compatibility:
 Solution shold be work on all devices with button "TAPE\MD".  
