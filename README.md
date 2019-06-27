@@ -13,7 +13,7 @@ Description on protocol found here [http:\\\\nikosapi.org](http://nikosapi.org/w
 
 Implementation the tape emulator based on the [Arduino micro pro 5V](https://www.sparkfun.com/products/11098) hardware. This device is popular and available in any electrical store also easy to programming.
 
-Devide use one pin for conneting to audio system data bus, this pin used as I\O and reconfigured during send command.
+Device use one pin for connecting to audio system data bus, this pin used as I\O and reconfigured during send command.
 
 Second pin use for control playing on phone (like single button on headset). This functionality allow control playing (start\stop and switch next track). If you use Jack3.5 whithout the MIC pin juct don't connect this pin.
 
