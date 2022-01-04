@@ -1,15 +1,15 @@
-#Mazda tape deck emulator
+# Mazda tape deck emulator
 
 Tape Deck Emulator for Mazda 6 up to 2006 year (with MD/TAPE button). After connect this device to tape connector audio system will swich device (via TAPE/MD button) to "Tape mode" and you can use tape audio signals for playing external audio sources.
 This emulator well suited for implement AUX functionality (of course instead of tape). Also emulator allow control plaing if you will use 4-pin audio jact.
 
-##Software
+## Software
 Project implemented in Arduino environment and provide as "Arduino sketch". 
 
 Description on protocol found here [http:\\\\nikosapi.org](http://nikosapi.org/w/index.php/Mazda_Entertainment_System_-_Bus_Protocol). Thanks to Nikosapi!
 
 
-##Hardware
+## Hardware
 
 Implementation the tape emulator based on the [Arduino micro pro 5V](https://www.sparkfun.com/products/11098) hardware. This device is popular and available in any electrical store also easy to programming.
 
@@ -25,7 +25,7 @@ Connecting diagram:
 
 ![Mazda tape deck emulator schematics](https://github.com/Krasutski/mazda_tape_deck_emulator/blob/master/doc/mazda_tape_emulator_jack_3_5_connecting.png)
 
-###Compatibility:
+### Compatibility:
 Solution shold be work on all devices with button "TAPE\MD".  
 Tested:
  * Mazda 6 2005 3.0L
